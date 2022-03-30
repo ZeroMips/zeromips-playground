@@ -1,4 +1,5 @@
 .import xosera_init
+.import xoboing
 .export nmi, puls, start
 
 .segment "INIT"
@@ -19,6 +20,7 @@ start:
 	txs
 
 	jsr xosera_init
+	jsr xoboing
 
 loop:
 	jmp loop
