@@ -28,7 +28,8 @@ XOBOING_SOURCES = \
 XOBOING_RLE_SOURCES = \
 	$(BUILD_DIR)/bg_real.bin \
 	$(BUILD_DIR)/tiles.bin \
-	$(BUILD_DIR)/palettes.bin
+	$(BUILD_DIR)/palettes.bin \
+	$(BUILD_DIR)/copperlist.bin 
 
 all: $(BUILD_DIR)/playground.bin
 

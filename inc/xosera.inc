@@ -70,6 +70,40 @@ XR_PB_LINE_ADDR = $1D ; (- /W) playfield B scanline start address (loaded at sta
 XR_PB_HV_FSCALE = $1E ; (R /W) playfield B horizontal and vertical fractional scale
 XR_PB_UNUSED_1F = $1F ;
 
+XR_GFX_CTRL_BLANK	= 1<<7
+XR_GFX_CTRL_BM		= 1<<6
+XR_GFX_CTRL_BPP_1	= 0<<4
+XR_GFX_CTRL_BPP_4	= 1<<4
+XR_GFX_CTRL_BPP_8	= 2<<4
+XR_GFX_CTRL_HX_1	= 0<<2
+XR_GFX_CTRL_HX_2	= 1<<2
+XR_GFX_CTRL_HX_3	= 2<<2
+XR_GFX_CTRL_HX_4	= 3<<2
+XR_GFX_CTRL_VX_1	= 0<<0
+XR_GFX_CTRL_VX_2	= 1<<0
+XR_GFX_CTRL_VX_3	= 2<<0
+XR_GFX_CTRL_VX_4	= 3<<0
+
+XR_TILE_CTRL_MAP_IN_VRAM	= 0<<9
+XR_TILE_CTRL_MAP_IN_TILEMEM	= 1<<9
+XR_TILE_CTRL_DEF_IN_VRAM	= 1<<8
+XR_TILE_CTRL_DEF_IN_TILEMEM	= 0<<8
+XR_TILE_CTRL_HEIGHT_1		= 0
+XR_TILE_CTRL_HEIGHT_2		= 1
+XR_TILE_CTRL_HEIGHT_3		= 2
+XR_TILE_CTRL_HEIGHT_4		= 3
+XR_TILE_CTRL_HEIGHT_5		= 4
+XR_TILE_CTRL_HEIGHT_6		= 5
+XR_TILE_CTRL_HEIGHT_7		= 6
+XR_TILE_CTRL_HEIGHT_8		= 7
+XR_TILE_CTRL_HEIGHT_9		= 8
+XR_TILE_CTRL_HEIGHT_10		= 9
+XR_TILE_CTRL_HEIGHT_11		= 10
+XR_TILE_CTRL_HEIGHT_12		= 11
+XR_TILE_CTRL_HEIGHT_13		= 12
+XR_TILE_CTRL_HEIGHT_14		= 13
+XR_TILE_CTRL_HEIGHT_15		= 14
+
 ; write 16 bit constant to register
 .macro xosera_wr16 addr, data16
 	lda #>data16
@@ -94,6 +128,14 @@ XR_PB_UNUSED_1F = $1F ;
 
 .macro xosera_sta_hi addr
 	sta XOSERA_BASE + addr * 2
+.endmacro
+
+.macro xosera_lda_lo addr
+	lda XOSERA_BASE + addr * 2 + 1
+.endmacro
+
+.macro xosera_lda_hi addr
+	lda XOSERA_BASE + addr * 2
 .endmacro
 
 ; write extended register

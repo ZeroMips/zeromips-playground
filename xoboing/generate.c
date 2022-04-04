@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include "xosera_m68k_defs.h"
 
 const uint16_t vram_base_a      = 0x0000;
 const uint16_t vram_base_b      = 0xA000;
@@ -80,6 +81,54 @@ uint8_t bg_bitmap_real[2 * sizeof(bg_bitmap) / 8] = {0};
 uint8_t ball_bitmap[BALL_BITMAP_HEIGHT][BALL_BITMAP_WIDTH] = {0};
 uint16_t ball_tiles[BALL_TILES_HEIGHT][BALL_TILES_WIDTH][TILE_HEIGHT_B][TILE_WIDTH_B / PIXELS_PER_WORD_B] = {0};
 uint16_t palettes[14*16] = {0};
+
+uint32_t copper_list[] = {
+    [0x0000] =  COP_MOVEC(vram_base_b, 0x0041 << 1 | 0x1),                                      // Fill dst
+    [0x0001] =  COP_MOVEC(0, 0x0106 << 1 | 0x1),                                                // Fill scroll
+    [0x0002] =  COP_MOVEC(MAKE_GFX_CTRL(0x00, 0, XR_GFX_BPP_4, 0, 0, 0), 0x0107 << 1 | 0x1),    // Fill gfx_ctrl with colorbase
+                COP_JUMP(0x0040 << 1),
+
+    [0x0040] =  COP_MOVEC(COP_MOVEC(0, 0x0104 << 1 | 0x1) >> 16, 0x0041 << 1 | 0x0),    // Make following move point to dst
+    [0x0041] =  COP_MOVEC(0, 0),
+                COP_MOVEC(COP_MOVEC(0, 0x0101 << 1 | 0x1) >> 16, 0x0041 << 1 | 0x0),    // Make preceding move point to prev_dst
+
+    [0x0043] =  COP_JUMP(0x0080 << 1),  // Jumps either to blitter load or to wait_f
+    [0x0044] =  COP_MOVEC(COP_JUMP(0x0080 << 1) >> 16, 0x0043 << 1 | 0x0),  // Make branching jump go to 0x0080 << 1
+                COP_WAIT_F(),
+
+    [0x0080] =  COP_MOVEC(COP_JUMP(0x0044 << 1) >> 16, 0x0043 << 1 | 0x0),  // Make branching jump go to 0x0080 << 1
+                COP_JUMP(0x00C0 << 1),
+
+                // Load fixed blitter settings
+    [0x00C0] =  COP_MOVER(XB_(0x00, 8, 8) | XB_(0, 5, 1) | XB_(0, 4, 1) | XB_(0, 3, 1) | XB_(0, 2, 1) | XB_(1, 1, 1) | XB_(0, 0, 1), BLIT_CTRL),
+                COP_MOVER(0x0000, BLIT_MOD_A),
+                COP_MOVER(0x0000, BLIT_MOD_B),
+                COP_MOVER(0xFFFF, BLIT_SRC_B),
+                COP_MOVER(0x0000, BLIT_MOD_C),
+                COP_MOVER(0x0000, BLIT_VAL_C),
+                COP_MOVER(WIDTH_WORDS_B - BALL_TILES_WIDTH, BLIT_MOD_D),
+                COP_MOVER(XB_(0xF, 12, 4) | XB_(0xF, 8, 4) | XB_(0, 0, 2), BLIT_SHIFT),
+                COP_MOVER(BALL_TILES_HEIGHT - 1, BLIT_LINES),
+
+                COP_WAIT_V(480),
+                COP_JUMP(0x0100 << 1),
+
+                // Blank existing ball
+    [0x0100] =  COP_MOVER(vram_base_blank, BLIT_SRC_A),
+    [0x0101] =  COP_MOVER(vram_base_b, BLIT_DST_D),         // Fill in prev_dst
+    [0x0102] =  COP_MOVER(BALL_TILES_WIDTH - 1, BLIT_WORDS),
+
+                // Draw ball
+    [0x0103] =  COP_MOVER(vram_base_ball, BLIT_SRC_A),
+    [0x0104] =  COP_MOVER(0, BLIT_DST_D),                   // Fill in dst
+    [0x0105] =  COP_MOVER(BALL_TILES_WIDTH - 1, BLIT_WORDS),
+
+    [0x0106] =  COP_MOVER(0, PB_HV_SCROLL),                 // Fill scroll
+
+    [0x0107] =  COP_MOVER(0, PB_GFX_CTRL),                  // Fill gfx_ctrl with colorbase
+
+                COP_JUMP(0x0003 << 1),
+};
 
 int abs(int x) {
     if (x < 0) {
@@ -223,7 +272,7 @@ void do_tiles(void) {   // Replace with generic bitmap to tilemap
                         word = word << PIXELS_PER_WORD_B | ball_bitmap[pixel_row][pixel_col + nibble];
                     }
 
-                    word = ((word & 0xff) << 8) | ((word >> 8) & 0xff);
+//                    word = ((word & 0xff) << 8) | ((word >> 8) & 0xff);
 
                     ball_tiles[tile_row][tile_col][row_in_tile][word_in_tile_row] = word;
                 }
@@ -343,14 +392,26 @@ void do_palettes(void) {
         uint8_t colour_base = palette_index * 16;
 
         palettes[colour_base + 0] = 0x0000; // Transparent Black
-        palettes[colour_base + 1] = 0x6000; // Translucent Black
+        palettes[colour_base + 1] = 0x0060; // Translucent Black
         for (uint16_t colour = 0; colour < 7; ++colour) {
             palettes[colour_base + 2 + (palette_index + colour) % 14] = 0xFFFF;   // White
         }
         for (uint16_t colour = 7; colour < 14; ++colour) {
-            palettes[colour_base + 2 + (palette_index + colour) % 14] = 0xFF00;   // Red
+            palettes[colour_base + 2 + (palette_index + colour) % 14] = 0x00FF;   // Red
         }
     }
+}
+
+static uint16_t swab16(uint16_t x)
+{
+    return x<<8 | x>>8;
+}
+
+static uint32_t swab32(uint32_t x)
+{
+    return x<<24 | x>>24 |
+        (x & (uint32_t)0x0000ff00UL)<<8 |
+        (x & (uint32_t)0x00ff0000UL)>>8;
 }
 
 int main() {
@@ -378,6 +439,9 @@ int main() {
     printf("Converting to tiles\n");
     do_tiles();
 
+    for (unsigned int i = 0; i <sizeof(ball_tiles)/2; ++i)
+        ((uint16_t*)ball_tiles)[i] = swab16(((uint16_t*)ball_tiles)[i]);
+
     f = fopen("tiles.bin", "w");
     fwrite(ball_tiles, sizeof(ball_tiles), 1, f);
     fclose(f);
@@ -387,5 +451,14 @@ int main() {
 
     f = fopen("palettes.bin", "w");
     fwrite(palettes, sizeof(palettes), 1, f);
+    fclose(f);
+
+    printf("Write copperlist\n");
+
+    for (unsigned int i = 0; i <sizeof(copper_list)/4; ++i)
+        copper_list[i] = swab32(copper_list[i]);
+
+    f = fopen("copperlist.bin", "w");
+    fwrite(copper_list, sizeof(copper_list), 1, f);
     fclose(f);
 }

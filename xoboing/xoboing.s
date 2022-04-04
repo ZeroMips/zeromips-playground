@@ -9,8 +9,15 @@ vram_base_ball	= $BC00
 tile_base_b		= $C000
 size			= 19200
 
+WIDTH_A = 320
+
+
 WIDTH_B = 640
 HEIGHT_B = 480
+
+COLS_PER_WORD_A = 8
+
+WIDTH_WORDS_A = WIDTH_A / COLS_PER_WORD_A
 
 TILE_WIDTH_B = 8
 TILE_HEIGHT_B = 8
@@ -30,6 +37,8 @@ srcend:				.res 2
 dest:				.res 2
 
 tile:		.res 2
+
+incval:				.res 1
 
 .segment "VAR"
 
@@ -54,21 +63,27 @@ ball_tiles:
 palettes:
 .incbin "../build/palettes.rle-toolkit"
 
+copperlist:
+.incbin "../build/copperlist.rle-toolkit"
+
 xoboing:
 	xosera_wr_extended XR_VID_CTRL, $0000
 
 	; setup playfield A
-	xosera_wr_extended XR_PA_GFX_CTRL, ((1<<6) | (1<<2) | (1<<0)) ; bitmap, 1 bit/pixel, 2xwide, 2xhigh
+	xosera_wr_extended XR_PA_GFX_CTRL, (XR_GFX_CTRL_BM | XR_GFX_CTRL_BPP_1 | XR_GFX_CTRL_HX_2 | XR_GFX_CTRL_VX_2) ; bitmap, 1 bit/pixel, 2xwide, 2xhigh
 	xosera_wr_extended XR_PA_DISP_ADDR, vram_base_a
 
 	; setup playfield B
 	xosera_wr_extended XR_PB_GFX_CTRL, (1<<4) ; tiled, 4 bit/pixel
-	xosera_wr_extended XR_PB_TILE_CTRL, $C108 ; tile memory at $C100, tiledata in VRAM, tiles 8 bit high
+	xosera_wr_extended XR_PB_TILE_CTRL, (tile_base_b | XR_TILE_CTRL_MAP_IN_VRAM | XR_TILE_CTRL_DEF_IN_VRAM | XR_TILE_CTRL_HEIGHT_8) ; tile memory at $C000, tiledata in VRAM, tiles 8 bit high
 	xosera_wr_extended XR_PB_DISP_ADDR, vram_base_b
 
 	; PA Colours:
 	xosera_wr_extended XR_COLOR_A_ADDR + 0, $0BBB ; Grey
 	xosera_wr_extended XR_COLOR_A_ADDR + 1, $0B0B ; Purple
+
+	xosera_wr16 XR_PA_LINE_LEN, WIDTH_WORDS_A
+	xosera_wr16 XR_PB_LINE_LEN, WIDTH_WORDS_B
 
 	; PB Colours:
 	ldx #14 ; palette index
@@ -113,6 +128,38 @@ xoboing:
 
 	jsr rle_unpack
 
+	; write color palettes
+	xosera_wr16 XM_XR_ADDR, XR_COLOR_B_ADDR ; extended area write ptr
+
+	lda #<palettes
+	sta src
+
+	lda #>palettes
+	sta src+1
+
+	lda #<xr_wr_xr_hi
+	sta xr_wrptr
+	lda #>xr_wr_xr_hi
+	sta xr_wrptr+1
+
+	jsr rle_unpack
+
+	; write copperlist
+	xosera_wr16 XM_XR_ADDR, XR_COPPER_ADDR ; extended area write ptr
+
+	lda #<copperlist
+	sta src
+
+	lda #>copperlist
+	sta src+1
+
+	lda #<xr_wr_xr_hi
+	sta xr_wrptr
+	lda #>xr_wr_xr_hi
+	sta xr_wrptr+1
+
+	jsr rle_unpack
+
 	; Load PB tilemap
 	; Two extra rows needed for fine scrolling, one for the bottom row, and one for the bottom right tile
 
@@ -127,6 +174,7 @@ xoboing:
 	lda #0
 	sta tile
 	sta tile + 1
+	sta incval
 	jsr vram_fill_tiled
 
 	; Load blank tilemap
@@ -142,10 +190,114 @@ xoboing:
 	lda #0
 	sta tile
 	sta tile + 1
+	sta incval
 	jsr vram_fill_tiled
 
-    ; Load ball tilemap
-;    vram_sequence_tiled(BALL_TILES_WIDTH, BALL_TILES_HEIGHT, 0, 0, 1, BALL_TILES_WIDTH, vram_base_ball);
+	; Load ball tilemap
+	ldx #BALL_TILES_WIDTH
+	ldy #BALL_TILES_HEIGHT
+	lda #BALL_TILES_WIDTH
+	sta line_len
+	lda #<vram_base_ball
+	sta row_base
+	lda #>vram_base_ball
+	sta row_base + 1
+	lda #0
+	sta tile
+	sta tile + 1
+	lda #1
+	sta incval
+	jsr vram_fill_tiled
+
+.if 0
+	; Write ball to screen
+	ldx #BALL_TILES_WIDTH
+	ldy #BALL_TILES_HEIGHT
+	lda #WIDTH_WORDS_B
+	sta line_len
+	lda #<vram_base_b
+	sta row_base
+	lda #>vram_base_b
+	sta row_base + 1
+	lda #0
+	sta tile
+	sta tile + 1
+	lda #1
+	sta incval
+	jsr vram_fill_tiled
+.endif
+
+.if 0
+	xosera_wr_extended (XR_COLOR_B_ADDR + $2), $F000 ;  // Black
+	xosera_wr_extended (XR_COLOR_B_ADDR + $3), $FFFF ;  // White
+	xosera_wr_extended (XR_COLOR_B_ADDR + $4), $FF00 ;  // Red
+	xosera_wr_extended (XR_COLOR_B_ADDR + $5), $FF70 ;  // Orange
+	xosera_wr_extended (XR_COLOR_B_ADDR + $6), $FFF0 ;  // Yellow
+	xosera_wr_extended (XR_COLOR_B_ADDR + $7), $F7F0 ;  // Spring Green
+	xosera_wr_extended (XR_COLOR_B_ADDR + $8), $F0F0 ;  // Green
+	xosera_wr_extended (XR_COLOR_B_ADDR + $9), $F0F7 ;  // Turquoise
+	xosera_wr_extended (XR_COLOR_B_ADDR + $A), $F0FF ;  // Cyan
+	xosera_wr_extended (XR_COLOR_B_ADDR + $B), $F07F ;  // Ocean
+	xosera_wr_extended (XR_COLOR_B_ADDR + $C), $F00F ;  // Blue
+	xosera_wr_extended (XR_COLOR_B_ADDR + $D), $F70F ;  // Violet
+	xosera_wr_extended (XR_COLOR_B_ADDR + $E), $FF0F ;  // Magenta
+	xosera_wr_extended (XR_COLOR_B_ADDR + $F), $FF07 ;  // Raspberry
+.endif
+
+.if 0
+@colors:
+	xosera_wr_extended XR_PB_GFX_CTRL, ($0000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($1000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($2000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($3000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($4000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($5000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($5000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($7000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($8000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($9000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($A000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($B000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($C000 | (1<<4))
+	jsr vswait
+	xosera_wr_extended XR_PB_GFX_CTRL, ($D000 | (1<<4))
+	jsr vswait
+
+	jmp @colors
+
+vswait:
+	ldx #10
+@loop:
+	xosera_wr16 XM_XR_ADDR, XR_SCANLINE
+	xosera_lda_hi XM_XR_DATA
+	and #1<<7
+	beq @loop
+	dex
+	bne @loop
+	rts
+
+.endif
+
+.if 1
+	xosera_wr_extended (XR_COPPER_ADDR + $0002 << 1 | $1), (1<<4)
+
+	xosera_wr_extended (XR_COPPER_ADDR | $01), (vram_base_b + WIDTH_WORDS_B * 10)
+	xosera_wr_extended (XR_COPPER_ADDR | $11), 0
+
+	xosera_wr_extended XR_COPP_CTRL, (1<<15)
+.endif
 
 	rts
 
@@ -158,21 +310,48 @@ xr_wr_lo_only:
 ; write lo byte and prepare writing hi byte in next cycle
 xr_wr_lo:
 	xosera_sta_lo XM_DATA
+	pha
 	lda #<xr_wr_hi
 	sta xr_wrptr
 	lda #>xr_wr_hi
 	sta xr_wrptr+1
+	pla
 	jmp rle_store_cont
 
 ; write hi byte and prepare writing lo byte in next cycle
 xr_wr_hi:
 	xosera_sta_hi XM_DATA
+	pha
 	lda #<xr_wr_lo
 	sta xr_wrptr
 	lda #>xr_wr_lo
 	sta xr_wrptr+1
+	pla
 	jmp rle_store_cont
 
+; write extended area lo byte and prepare writing hi byte in next cycle
+xr_wr_xr_lo:
+	xosera_sta_lo XM_XR_DATA
+	pha
+	lda #<xr_wr_xr_hi
+	sta xr_wrptr
+	lda #>xr_wr_xr_hi
+	sta xr_wrptr+1
+	pla
+	jmp rle_store_cont
+
+; write extended area hi byte and prepare writing lo byte in next cycle
+xr_wr_xr_hi:
+	xosera_sta_hi XM_XR_DATA
+	pha
+	lda #<xr_wr_xr_lo
+	sta xr_wrptr
+	lda #>xr_wr_xr_lo
+	sta xr_wrptr+1
+	pla
+	jmp rle_store_cont
+
+; rle implementation is based on code Copyright (c) 2004, Per Olofsson
 ; read a byte and increment source pointer
 rle_read:
 	lda (src),y
@@ -222,8 +401,9 @@ rle_unpack:
 	rts
 
 ; row_base:		first row
-; line_len:	video memory line length
+; line_len:		video memory line length
 ; tile:			tile to fill
+; incval:		add this to tile every round
 ; X register:	width
 ; Y register:	height
 vram_fill_tiled:
@@ -242,6 +422,13 @@ vram_fill_tiled:
 
 @cols:
 	xosera_wrp16 XM_DATA, tile
+	lda incval
+	clc
+	adc tile
+	sta tile
+	lda #0
+	adc tile + 1
+	sta tile + 1
 	dex
 	bne @cols
 
