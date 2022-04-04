@@ -228,6 +228,7 @@ xoboing:
 .endif
 
 .if 0
+; false color palette to show sectors
 	xosera_wr_extended (XR_COLOR_B_ADDR + $2), $F000 ;  // Black
 	xosera_wr_extended (XR_COLOR_B_ADDR + $3), $FFFF ;  // White
 	xosera_wr_extended (XR_COLOR_B_ADDR + $4), $FF00 ;  // Red
@@ -245,6 +246,7 @@ xoboing:
 .endif
 
 .if 0
+; rotate palettes synchronized to video
 @colors:
 	xosera_wr_extended XR_PB_GFX_CTRL, ($0000 | (1<<4))
 	jsr vswait
@@ -278,7 +280,7 @@ xoboing:
 	jmp @colors
 
 vswait:
-	ldx #10
+	ldx #10 ; wait for 10 frames
 @loop:
 	xosera_wr16 XM_XR_ADDR, XR_SCANLINE
 	xosera_lda_hi XM_XR_DATA
