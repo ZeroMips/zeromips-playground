@@ -1,6 +1,11 @@
 .include "xosera.inc"
 
 .export xoboing
+.import _do_physics
+.import _init_physics
+.import _dst
+.import _scroll
+.import _gfxctrl
 
 vram_base_a		= $0000
 vram_base_b		= $A000
@@ -293,12 +298,36 @@ vswait:
 .endif
 
 .if 1
+	jsr _init_physics
 	xosera_wr_extended (XR_COPPER_ADDR + $0002 << 1 | $1), (1<<4)
 
-	xosera_wr_extended (XR_COPPER_ADDR | $01), (vram_base_b + WIDTH_WORDS_B * 10)
-	xosera_wr_extended (XR_COPPER_ADDR | $11), 0
+loop:
+	jsr _do_physics
 
+	xosera_wr16 XM_XR_ADDR, (XR_COPPER_ADDR | $01)
+	xosera_wrp16 XM_XR_DATA, _dst
+	xosera_wr16 XM_XR_ADDR, (XR_COPPER_ADDR | $11)
+	xosera_wrp16 XM_XR_DATA, _scroll
+	xosera_wr16 XM_XR_ADDR, (XR_COPPER_ADDR + ($0002 << 1 | $1))
+	xosera_wrp16 XM_XR_DATA, _gfxctrl
 	xosera_wr_extended XR_COPP_CTRL, (1<<15)
+
+vswait:
+	ldx #2 ; wait for 2 frame(s)
+@waitlow:
+	xosera_wr16 XM_XR_ADDR, XR_SCANLINE
+	xosera_lda_hi XM_XR_DATA
+	and #1<<7
+	bne @waitlow
+@waithigh:
+	xosera_wr16 XM_XR_ADDR, XR_SCANLINE
+	xosera_lda_hi XM_XR_DATA
+	and #1<<7
+	beq @waithigh
+	dex
+	bne @waitlow
+
+	jmp loop
 .endif
 
 	rts

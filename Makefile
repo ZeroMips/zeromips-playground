@@ -13,6 +13,8 @@ ASFLAGS		+= -g
 # all files are allowed to use 65SC02 features
 ASFLAGS		+= --cpu 65SC02
 
+CFLAGS		+= -t none
+
 BUILD_DIR = build
 
 CORE_DEPS =
@@ -23,13 +25,17 @@ CORE_SOURCES = \
 	xosera.s
 
 XOBOING_SOURCES = \
-	xoboing/xoboing.s
+	xoboing/xoboing.s \
+	$(XOBOING_COBJS)
+
+XOBOING_CSOURCES = \
+	xoboing/physics.c \
 
 XOBOING_RLE_SOURCES = \
 	$(BUILD_DIR)/bg_real.bin \
 	$(BUILD_DIR)/tiles.bin \
 	$(BUILD_DIR)/palettes.bin \
-	$(BUILD_DIR)/copperlist.bin 
+	$(BUILD_DIR)/copperlist.bin
 
 all: $(BUILD_DIR)/playground.bin
 
@@ -40,13 +46,20 @@ $(BUILD_DIR)/%.o: %.s
 	@mkdir -p $$(dirname $@)
 	$(AS) $(ASFLAGS) $< -o $@ -l $(BUILD_DIR)/$*.lst
 
+$(BUILD_DIR)/%.s: %.c
+	@mkdir -p $$(dirname $@)
+	$(CC) $(CFLAGS) $< -o $@
+
 CORE_OBJS  = $(addprefix $(BUILD_DIR)/, $(CORE_SOURCES:.s=.o))
 XOBOING_OBJS  = $(addprefix $(BUILD_DIR)/, $(XOBOING_SOURCES:.s=.o))
+XOBOING_COBJS  = $(addprefix $(BUILD_DIR)/, $(XOBOING_CSOURCES:.c=.s))
 XOBOING_RLE  = $(XOBOING_RLE_SOURCES:.bin=.rle-toolkit)
 
-$(BUILD_DIR)/playground.bin: $(CORE_OBJS) $(CORE_DEPS) $(XOBOING_RLE) $(XOBOING_OBJS) core.cfg
+$(BUILD_DIR)/xoboing/xoboing.o: $(XOBOING_RLE)
+
+$(BUILD_DIR)/playground.bin: $(CORE_OBJS) $(CORE_DEPS) $(XOBOING_RLE) $(XOBOING_OBJS) $(XOBOING_COBJS) core.cfg
 	@mkdir -p $$(dirname $@)
-	$(LD) -C core.cfg $(CORE_OBJS) $(XOBOING_OBJS) -o $@ -m $(BUILD_DIR)/playground.map -Ln $(BUILD_DIR)/playground.sym
+	$(LD) -C core.cfg $(CORE_OBJS) $(XOBOING_OBJS) -o $@ -m $(BUILD_DIR)/playground.map -Ln $(BUILD_DIR)/playground.sym none.lib
 
 $(BUILD_DIR)/xoboing_generate: xoboing/generate.c
 	$(HOSTCC) xoboing/generate.c -o $(BUILD_DIR)/xoboing_generate -lm

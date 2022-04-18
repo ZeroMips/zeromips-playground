@@ -1,6 +1,9 @@
 .import xosera_init
 .import xoboing
 .export nmi, puls, start
+.import __STACKSTART__ ; Linker generated
+
+.include "zeropage.inc"
 
 .segment "INIT"
 nmi:
@@ -18,6 +21,12 @@ start:
 
 	ldx #$FF
 	txs
+
+	; initialize C runtime stack
+	lda #<__STACKSTART__
+	ldx #>__STACKSTART__
+	sta sp
+	stx sp+1
 
 	jsr xosera_init
 	jsr xoboing
